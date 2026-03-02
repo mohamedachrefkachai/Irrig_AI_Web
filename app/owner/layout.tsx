@@ -4,19 +4,17 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-const farms = [
-  { id: "olive-tunis", name: "Olive Farm", location: "Tunis" },
-  { id: "citrus-nabeul", name: "Citrus Farm", location: "Nabeul" },
-  { id: "palm-tozeur", name: "Palm Farm", location: "Tozeur" },
-];
-
 export default function OwnerLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [farms, setFarms] = useState<any[]>([]);
+  const [loadingFarms, setLoadingFarms] = useState(true);
 
   // Récupérer le nom de l'utilisateur depuis le cookie de session (statique pour la démo)
   const [userName, setUserName] = useState<string>("");
+  
   useEffect(() => {
+    // Fetch user name
     try {
       const match = document.cookie.match(/session=([^;]+)/);
       if (match) {
@@ -25,22 +23,38 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
         else setUserName("");
       }
     } catch {}
+
+    // Fetch user farms
+    async function fetchFarms() {
+      try {
+        const res = await fetch("/api/dashboard/farms");
+        const data = await res.json();
+        setFarms(data);
+      } catch (error) {
+        console.error("Error fetching farms:", error);
+      } finally {
+        setLoadingFarms(false);
+      }
+    }
+    fetchFarms();
   }, []);
 
   const farmIdFromUrl = useMemo(() => {
     const match = pathname.match(/\/owner\/farms\/([^/]+)/);
-    return match?.[1] ?? farms[0].id;
-  }, [pathname]);
+    return match?.[1] ?? (farms.length > 0 ? farms[0]._id : null);
+  }, [pathname, farms]);
 
-  const [currentFarmId, setCurrentFarmId] = useState<string>(farmIdFromUrl);
+  const [currentFarmId, setCurrentFarmId] = useState<string | null>(farmIdFromUrl);
 
   useEffect(() => {
-    if (currentFarmId !== farmIdFromUrl) setCurrentFarmId(farmIdFromUrl);
+    if (farmIdFromUrl && currentFarmId !== farmIdFromUrl) {
+      setCurrentFarmId(farmIdFromUrl);
+    }
   }, [currentFarmId, farmIdFromUrl]);
 
-  const currentFarm = farms.find((f) => f.id === currentFarmId) ?? farms[0];
+  const currentFarm = farms.find((f) => f._id === currentFarmId) ?? farms[0];
 
-  const nav = [
+  const nav = currentFarmId ? [
     { href: `/owner/farms/${currentFarmId}`, label: "Overview", icon: "📌" },
     { href: `/owner/farms/${currentFarmId}/zones`, label: "Zones", icon: "📍" },
     { href: `/owner/farms/${currentFarmId}/trees`, label: "Trees", icon: "🌳" },
@@ -50,7 +64,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
     { href: `/owner/farms/${currentFarmId}/robot`, label: "Robot", icon: "🤖" },
     { href: `/owner/farms/${currentFarmId}/reports`, label: "Reports", icon: "📈" },
     { href: `/owner/farms/${currentFarmId}/settings`, label: "Settings", icon: "⚙️" },
-  ];
+  ] : [];
 
   function onFarmChange(id: string) {
     setCurrentFarmId(id);
@@ -83,31 +97,43 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
                 </div>
 
                 <div className="rounded-2xl border border-gray-200 bg-[#F7F8F4] p-3">
-                  <select
-                    value={currentFarmId}
-                    onChange={(e) => onFarmChange(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 font-extrabold text-gray-900 outline-none focus:ring-2 focus:ring-green-300/60"
-                  >
-                    {farms.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.name} - {f.location}
-                      </option>
-                    ))}
-                  </select>
+                  {loadingFarms ? (
+                    <div className="text-sm text-gray-500 py-2">Loading farms...</div>
+                  ) : farms.length === 0 ? (
+                    <div className="text-sm text-gray-500 py-2">No farms found</div>
+                  ) : (
+                    <>
+                      <select
+                        value={currentFarmId || ""}
+                        onChange={(e) => onFarmChange(e.target.value)}
+                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 font-extrabold text-gray-900 outline-none focus:ring-2 focus:ring-green-300/60"
+                      >
+                        {farms.map((f) => (
+                          <option key={f._id} value={f._id}>
+                            {f.name} - {f.location}
+                          </option>
+                        ))}
+                      </select>
 
-                  <div className="mt-3 flex items-center justify-between">
-                    <div className="text-sm font-extrabold text-gray-900">{currentFarm.name}</div>
-                    <Link
-                      href="/owner/farms"
-                      className="text-xs font-extrabold text-green-800 hover:text-green-900"
-                    >
-                      Manage -&gt;
-                    </Link>
-                  </div>
+                      {currentFarm && (
+                        <>
+                          <div className="mt-3 flex items-center justify-between">
+                            <div className="text-sm font-extrabold text-gray-900">{currentFarm.name}</div>
+                            <Link
+                              href="/owner/farms"
+                              className="text-xs font-extrabold text-green-800 hover:text-green-900"
+                            >
+                              Manage -&gt;
+                            </Link>
+                          </div>
 
-                  <div className="mt-1 text-xs text-gray-600 font-semibold">
-                    Location: {currentFarm.location}
-                  </div>
+                          <div className="mt-1 text-xs text-gray-600 font-semibold">
+                            Location: {currentFarm.location}
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -145,7 +171,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
               <div>
                 <div className="text-sm font-extrabold text-green-700">DASHBOARD</div>
                 <div className="text-xl md:text-2xl font-extrabold text-gray-900">
-                  {currentFarm.name} - {currentFarm.location}
+                  {currentFarm ? `${currentFarm.name} - ${currentFarm.location}` : "Select a farm"}
                 </div>
               </div>
 

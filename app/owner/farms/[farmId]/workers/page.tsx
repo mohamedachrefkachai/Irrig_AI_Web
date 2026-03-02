@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 
 type WorkerStatus = "Active" | "Offline" | "On field" | "Invited";
 type WorkerRole = "Field Operator" | "Maintenance" | "Supervisor";
-type Zone = "Zone A" | "Zone B" | "—";
+type Zone = string;
 
 type TaskPriority = "Low" | "Medium" | "High";
 type TaskStatus = "Pending" | "In progress" | "Done";
@@ -29,6 +29,7 @@ type Worker = {
   status: WorkerStatus;
   zone: Zone;
   inviteCode?: string;
+  inviteQrUrl?: string;
   tasks: Task[];
   lastSeen: string;
   photo: string;
@@ -85,6 +86,8 @@ const demoWorkersByFarm: Record<string, Worker[]> = {
       status: "Invited",
       zone: "—",
       inviteCode: "IRG-9Q2K7",
+      inviteQrUrl:
+        "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=IRG-9Q2K7",
       tasks: [],
       lastSeen: "Invitation sent",
       photo: "/worker-default.jpg",
@@ -133,6 +136,14 @@ function makeInviteCode() {
   return `IRG-${s}`;
 }
 
+function makeInvitePayload(farmId: string, code: string, role: WorkerRole, zone: Zone) {
+  return JSON.stringify({ farmId, code, role, zone, type: "worker-invite" });
+}
+
+function makeInviteQrUrl(payload: string) {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(payload)}`;
+}
+
 function todayISO() {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -168,16 +179,43 @@ export default function WorkersPage() {
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [role, setRole] = useState<WorkerRole>("Field Operator");
-  const [zone, setZone] = useState<Zone>("Zone A");
+  const [zone, setZone] = useState<Zone>("—");
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
+  const [generatedQrUrl, setGeneratedQrUrl] = useState<string | null>(null);
+  const [zoneOptions, setZoneOptions] = useState<Zone[]>(["—"]);
 
   const [taskOpen, setTaskOpen] = useState(false);
   const [taskWorkerId, setTaskWorkerId] = useState<string | null>(null);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskPriority, setTaskPriority] = useState<TaskPriority>("Medium");
   const [taskDueDate, setTaskDueDate] = useState(todayISO());
-  const [taskZone, setTaskZone] = useState<Zone>("Zone A");
+  const [taskZone, setTaskZone] = useState<Zone>("—");
   const [taskNotes, setTaskNotes] = useState("");
+
+  useEffect(() => {
+    async function fetchZones() {
+      try {
+        const res = await fetch(`/api/dashboard/farms/${farmId}/zones`);
+        if (!res.ok) {
+          setZoneOptions(["—"]);
+          return;
+        }
+        const zones = await res.json();
+        const names = zones.map((z: any) => z.name).filter((name: string) => !!name?.trim());
+        const uniqueNames = Array.from(new Set(names));
+        setZoneOptions(uniqueNames.length > 0 ? uniqueNames : ["—"]);
+      } catch {
+        setZoneOptions(["—"]);
+      }
+    }
+    fetchZones();
+  }, [farmId]);
+
+  useEffect(() => {
+    const firstZone = zoneOptions[0] ?? "—";
+    setZone(firstZone);
+    setTaskZone(firstZone);
+  }, [zoneOptions]);
 
   const filtered = useMemo(() => {
     return workers.filter((w) => {
@@ -201,13 +239,17 @@ export default function WorkersPage() {
   function openInvite() {
     setInviteOpen(true);
     setGeneratedCode(null);
+    setGeneratedQrUrl(null);
     setRole("Field Operator");
-    setZone("Zone A");
+    setZone(zoneOptions[0] ?? "—");
   }
 
   function createInvite() {
     const code = makeInviteCode();
+    const payload = makeInvitePayload(farmId, code, role, zone);
+    const qrUrl = makeInviteQrUrl(payload);
     setGeneratedCode(code);
+    setGeneratedQrUrl(qrUrl);
 
     const newWorker: Worker = {
       id: `w${Math.random().toString(16).slice(2)}`,
@@ -216,6 +258,7 @@ export default function WorkersPage() {
       status: "Invited",
       zone,
       inviteCode: code,
+      inviteQrUrl: qrUrl,
       tasks: [],
       lastSeen: "Invitation sent",
       photo: "/worker-default.jpg",
@@ -248,7 +291,7 @@ export default function WorkersPage() {
     setTaskTitle("");
     setTaskPriority("Medium");
     setTaskDueDate(todayISO());
-    setTaskZone("Zone A");
+    setTaskZone(zoneOptions[0] ?? "—");
     setTaskNotes("");
     setTaskOpen(true);
   }
@@ -394,9 +437,9 @@ export default function WorkersPage() {
 
             <Field label="Assigned Zone">
               <select value={zone} onChange={(e) => setZone(e.target.value as Zone)} className={inputClass}>
-                <option value="Zone A">Zone A</option>
-                <option value="Zone B">Zone B</option>
-                <option value="—">—</option>
+                {zoneOptions.map((zoneName) => (
+                  <option key={zoneName} value={zoneName}>{zoneName}</option>
+                ))}
               </select>
             </Field>
           </div>
@@ -427,11 +470,15 @@ export default function WorkersPage() {
 
                 <div className="rounded-2xl bg-white border border-gray-200 p-4 grid place-items-center">
                   <div className="text-xs font-extrabold text-gray-500 uppercase">QR</div>
-                  <div className="mt-2 h-24 w-24 rounded-xl border border-dashed border-gray-300 grid place-items-center text-xs font-extrabold text-gray-500">
-                    QR
-                  </div>
+                  {generatedQrUrl ? (
+                    <img src={generatedQrUrl} alt="Invite QR" className="mt-2 h-24 w-24 rounded-xl border border-gray-200" />
+                  ) : (
+                    <div className="mt-2 h-24 w-24 rounded-xl border border-dashed border-gray-300 grid place-items-center text-xs font-extrabold text-gray-500">
+                      QR
+                    </div>
+                  )}
                   <div className="mt-2 text-[11px] text-gray-500 font-semibold text-center">
-                    (placeholder)
+                    Scan in Android app
                   </div>
                 </div>
               </div>
@@ -480,9 +527,9 @@ export default function WorkersPage() {
 
               <Field label="Zone">
                 <select value={taskZone} onChange={(e) => setTaskZone(e.target.value as Zone)} className={inputClass}>
-                  <option value="Zone A">Zone A</option>
-                  <option value="Zone B">Zone B</option>
-                  <option value="—">—</option>
+                  {zoneOptions.map((zoneName) => (
+                    <option key={zoneName} value={zoneName}>{zoneName}</option>
+                  ))}
                 </select>
               </Field>
             </div>
@@ -647,6 +694,11 @@ function WorkerCard({
               <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-purple-50 border border-purple-200 px-3 py-1">
                 <span className="text-xs font-extrabold text-purple-800">Invite:</span>
                 <span className="text-xs font-extrabold text-purple-900">{w.inviteCode}</span>
+              </div>
+            )}
+            {w.status === "Invited" && w.inviteQrUrl && (
+              <div className="mt-2">
+                <img src={w.inviteQrUrl} alt="Worker invite QR" className="h-16 w-16 rounded-xl border border-purple-200" />
               </div>
             )}
           </div>

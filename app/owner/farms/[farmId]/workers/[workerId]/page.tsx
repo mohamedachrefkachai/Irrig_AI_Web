@@ -26,6 +26,7 @@ type Worker = {
   status: string;
   zone: Zone;
   inviteCode?: string;
+  inviteQrUrl?: string;
   lastSeen: string;
   photo: string;
   tasks: Task[];
@@ -97,6 +98,8 @@ const demoProfiles: Record<string, Worker> = {
     status: "Invited",
     zone: "—",
     inviteCode: "IRG-9Q2K7",
+    inviteQrUrl:
+      "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=IRG-9Q2K7",
     lastSeen: "Invitation sent",
     photo: "/worker-default.jpg",
     tasks: [],
@@ -116,6 +119,8 @@ export default function WorkerProfilePage() {
       status: "Invited",
       zone: "—",
       inviteCode: "IRG-XXXXX",
+      inviteQrUrl:
+        "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=IRG-XXXXX",
       lastSeen: "—",
       photo: "/worker-default.jpg",
       tasks: [],
@@ -166,6 +171,16 @@ export default function WorkerProfilePage() {
             <div className="mt-4 rounded-2xl bg-purple-50 border border-purple-200 px-4 py-3 text-center w-full">
               <div className="text-xs font-extrabold text-purple-700 uppercase">Invite Code</div>
               <div className="mt-1 text-lg font-extrabold text-purple-900">{worker.inviteCode}</div>
+              {worker.inviteQrUrl && (
+                <div className="mt-3 grid place-items-center">
+                  <img
+                    src={worker.inviteQrUrl}
+                    alt="Invite QR"
+                    className="h-24 w-24 rounded-xl border border-purple-200"
+                  />
+                  <div className="mt-1 text-[11px] font-semibold text-purple-700">Scan with mobile app</div>
+                </div>
+              )}
             </div>
           )}
         </div>
