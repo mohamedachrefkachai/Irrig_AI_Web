@@ -205,6 +205,14 @@ export default function ZonesPage() {
                 <div className="text-gray-700 mb-1">Width: {z.width} m</div>
                 <div className="text-gray-700 mb-1">Length: {z.length} m</div>
                 <div className="text-gray-500 text-xs mt-2">Created: {z.created_at ? new Date(z.created_at).toLocaleString() : "-"}</div>
+                <div className="flex gap-2 mt-4">
+                  <Link
+                    href={`/owner/farms/${farmId}/zones/${z._id}/trees`}
+                    className="flex-1 text-center bg-green-600 hover:bg-green-700 transition text-white px-4 py-2 rounded-xl font-bold text-sm"
+                  >
+                    🌳 Trees
+                  </Link>
+                </div>
               </div>
             ))
           )}

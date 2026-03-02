@@ -10,6 +10,7 @@ const AddZoneForm = dynamic(() => import("./AddZoneForm"), { ssr: false });
 export default function FarmDetailPage() {
   const { farmId } = useParams();
   const [farm, setFarm] = useState<any>(null);
+  const [zones, setZones] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -22,6 +23,12 @@ export default function FarmDetailPage() {
       }
       const data = await res.json();
       setFarm(data);
+      
+      // Fetch zones
+      const zonesRes = await fetch(`/api/dashboard/farms/${farmId}/zones`);
+      const zonesData = await zonesRes.json();
+      setZones(zonesData);
+      
       setLoading(false);
     }
     fetchFarm();
@@ -64,23 +71,43 @@ export default function FarmDetailPage() {
   `;
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-green-50 to-white flex flex-col items-center justify-center px-4">
-      <div className="w-full max-w-3xl bg-white rounded-3xl shadow-2xl p-10 mt-10">
-        <h1 className="text-3xl font-extrabold text-gray-900 mb-6">Farm Details</h1>
-        <div className="mb-8">
-          <div className="text-lg font-bold text-green-700">{farm.name}</div>
-          <div className="text-gray-700">Location: {farm.location}</div>
-          <div className="text-gray-700">Length: {farm.longueur} m</div>
-          <div className="text-gray-700">Width: {farm.largeur} m</div>
-          <div className="text-gray-700">Created: {new Date(farm.created_at).toLocaleString()}</div>
+    <main className="min-h-screen bg-gradient-to-br from-green-50 to-white flex flex-col items-center px-4 py-8">
+      <div className="w-full max-w-7xl">
+        {/* Header */}
+        <div className="bg-white rounded-3xl shadow-2xl p-8 mb-6">
+          <h1 className="text-3xl font-extrabold text-gray-900 mb-4">🏡 Farm Details</h1>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <div className="text-2xl font-bold text-green-700 mb-2">{farm.name}</div>
+              <div className="text-gray-700">📍 Location: {farm.location}</div>
+              <div className="text-gray-700">📏 Dimensions: {farm.longueur}m × {farm.largeur}m</div>
+              <div className="text-gray-500 text-sm mt-2">Created: {new Date(farm.created_at).toLocaleString()}</div>
+            </div>
+            <div className="flex items-center justify-end">
+              <Link href="/owner/farms" className="border-2 border-green-600 text-green-700 hover:bg-green-50 font-bold px-6 py-3 rounded-xl transition">
+                ← Back to Farms
+              </Link>
+            </div>
+          </div>
         </div>
-                    <div className="mb-8 flex flex-col items-center">
-                      <AddZoneForm farmId={farm._id} onZoneAdded={() => window.location.reload()} />
-                      {/* Show SVG with zones */}
-                      <FarmZonesSVG />
-                    </div>
-        <div className="mt-6 text-center">
-          <Link href="/owner/farms" className="text-green-700 hover:underline font-bold">← Back to Farms</Link>
+
+        {/* Farm Overview with Zones */}
+        <div className="bg-white rounded-3xl shadow-2xl p-8 mb-6">
+          <h2 className="text-2xl font-extrabold text-gray-900 mb-4">🗺️ Farm Overview</h2>
+          <div className="flex justify-center">
+            <FarmZonesSVG />
+          </div>
+        </div>
+
+        {/* Add Zone Form */}
+        <div>
+          <AddZoneForm 
+            farmId={farm._id} 
+            farmWidth={farm.longueur}
+            farmLength={farm.largeur}
+            existingZones={zones}
+            onZoneAdded={() => window.location.reload()} 
+          />
         </div>
       </div>
     </main>
