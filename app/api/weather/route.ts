@@ -27,13 +27,22 @@ export async function GET(req: Request) {
       );
     }
 
-    const temp = Math.round(data.current.temp_c);
+    const temp = data.current.temp_c;
     const desc = data.current.condition.text;
     const icon = data.current.condition.icon.startsWith("//")
       ? `https:${data.current.condition.icon}`
       : data.current.condition.icon;
+    const humidity = data.current.humidity;
+    const windSpeed = data.current.wind_kph;
 
-    return NextResponse.json({ temp, desc, icon });
+    return NextResponse.json({ 
+      temperature: temp,
+      condition: desc,
+      icon: icon,
+      humidity: humidity,
+      windSpeed: windSpeed,
+      isDay: data.current.is_day === 1
+    });
   } catch {
     return NextResponse.json(
       { error: "Failed to fetch weather" },

@@ -1,147 +1,94 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 
-type TaskPriority = "Low" | "Medium" | "High";
-type TaskStatus = "Pending" | "In progress" | "Done";
-type Zone = "Zone A" | "Zone B" | "—";
-
-type Task = {
+type TaskItem = {
   id: string;
+  farm_id: string;
+  worker: {
+    id: string;
+    name: string;
+    email: string;
+  };
   title: string;
-  priority: TaskPriority;
-  status: TaskStatus;
-  dueDate: string;
-  zone: Zone;
-  createdAt: string;
+  description?: string;
+  priority: "LOW" | "MEDIUM" | "HIGH";
+  status: "PENDING" | "IN_PROGRESS" | "DONE";
+  due_date?: string;
+  created_at: string;
 };
 
-type Worker = {
-  id: string;
-  name: string;
-  photo: string;
-  tasks: Task[];
-};
-
-const demoWorkers: Record<string, Worker[]> = {
-  "olive-tunis": [
-    {
-      id: "w1",
-      name: "Ahmed Ben Ali",
-      photo: "/worker-default.jpg",
-      tasks: [
-        {
-          id: "t1",
-          title: "Check soil moisture sensors",
-          priority: "High",
-          status: "In progress",
-          dueDate: "2026-02-20",
-          zone: "Zone A",
-          createdAt: "2026-02-19",
-        },
-        {
-          id: "t2",
-          title: "Inspect drip lines",
-          priority: "Medium",
-          status: "Pending",
-          dueDate: "2026-02-21",
-          zone: "Zone A",
-          createdAt: "2026-02-19",
-        },
-        {
-          id: "t3",
-          title: "Report anomalies",
-          priority: "Low",
-          status: "Done",
-          dueDate: "2026-02-19",
-          zone: "Zone A",
-          createdAt: "2026-02-18",
-        },
-      ],
-    },
-    {
-      id: "w2",
-      name: "Sami K.",
-      photo: "/worker-default.jpg",
-      tasks: [
-        {
-          id: "t4",
-          title: "Inspect valve wiring",
-          priority: "Medium",
-          status: "Pending",
-          dueDate: "2026-02-21",
-          zone: "Zone B",
-          createdAt: "2026-02-19",
-        },
-      ],
-    },
-  ],
-};
-
-function todayISO() {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+function formatDate(value?: string) {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleDateString();
 }
 
-function daysDiff(fromISO: string, toISO: string) {
-  const a = new Date(fromISO + "T00:00:00");
-  const b = new Date(toISO + "T00:00:00");
-  const ms = b.getTime() - a.getTime();
-  return Math.floor(ms / (1000 * 60 * 60 * 24));
-}
-
-function taskRisk(dueDateISO: string) {
-  const today = todayISO();
-  const d = daysDiff(today, dueDateISO);
-  if (d < 0) return "OVERDUE";
-  if (d <= 1) return "DUE_SOON";
-  return "ON_TIME";
-}
-
-function RiskChip({ dueDate }: { dueDate: string }) {
-  const r = taskRisk(dueDate);
+function StatusChip({ status }: { status: TaskItem["status"] }) {
   const cls =
-    r === "OVERDUE"
-      ? "bg-red-100 text-red-800 border-red-200"
-      : r === "DUE_SOON"
-        ? "bg-orange-100 text-orange-800 border-orange-200"
-        : "bg-green-100 text-green-800 border-green-200";
+    status === "DONE"
+      ? "bg-green-100 text-green-800"
+      : status === "IN_PROGRESS"
+        ? "bg-blue-100 text-blue-800"
+        : "bg-gray-100 text-gray-800";
 
-  const label = r === "OVERDUE" ? "Overdue" : r === "DUE_SOON" ? "Due soon" : "On time";
+  const label =
+    status === "IN_PROGRESS" ? "In progress" : status === "DONE" ? "Done" : "Pending";
 
-  return (
-    <span className={`px-2.5 py-1 rounded-full text-xs font-extrabold border ${cls}`}>
-      {label}
-    </span>
-  );
+  return <span className={`px-3 py-1 rounded-full text-xs font-extrabold ${cls}`}>{label}</span>;
+}
+
+function PriorityChip({ priority }: { priority: TaskItem["priority"] }) {
+  const cls =
+    priority === "HIGH"
+      ? "bg-red-100 text-red-800"
+      : priority === "MEDIUM"
+        ? "bg-orange-100 text-orange-800"
+        : "bg-green-100 text-green-800";
+
+  return <span className={`px-3 py-1 rounded-full text-xs font-extrabold ${cls}`}>{priority}</span>;
 }
 
 export default function FarmTasksPage() {
   const params = useParams<{ farmId: string }>();
   const farmId = params.farmId;
 
-  const workers = demoWorkers[farmId] ?? [];
-
-  const allTasks = useMemo(() => {
-    return workers.flatMap((w) =>
-      w.tasks.map((t) => ({
-        ...t,
-        workerId: w.id,
-        workerName: w.name,
-        workerPhoto: w.photo,
-      }))
-    );
-  }, [workers]);
-
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"NOT_DONE" | "DONE">("NOT_DONE");
 
-  const notDone = allTasks.filter((t) => t.status !== "Done");
-  const done = allTasks.filter((t) => t.status === "Done");
+  useEffect(() => {
+    async function loadTasks() {
+      try {
+        const res = await fetch(`/api/owner/tasks/list?farm_id=${farmId}`, {
+          credentials: "include",
+        });
+
+        if (!res.ok) {
+          setTasks([]);
+          return;
+        }
+
+        const data = await res.json();
+        setTasks(data.tasks || []);
+      } catch {
+        setTasks([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadTasks();
+  }, [farmId]);
+
+  const notDone = useMemo(
+    () => tasks.filter((t) => t.status === "PENDING" || t.status === "IN_PROGRESS"),
+    [tasks]
+  );
+  const done = useMemo(() => tasks.filter((t) => t.status === "DONE"), [tasks]);
   const list = tab === "DONE" ? done : notDone;
 
   return (
@@ -154,71 +101,93 @@ export default function FarmTasksPage() {
               Global Task Tracking
             </h1>
             <p className="mt-2 text-gray-600 font-semibold">
-              Track tasks across all workers. Click a worker to open their profile.
+              Follow all tasks of this farm and assign new tasks quickly from Workers.
             </p>
           </div>
 
-          <div className="flex gap-2">
-            <button
-              onClick={() => setTab("NOT_DONE")}
-              className={`px-5 py-2.5 rounded-xl font-extrabold transition ${
-                tab === "NOT_DONE"
-                  ? "bg-gray-900 text-white shadow"
-                  : "border border-gray-200 bg-white hover:bg-gray-50"
-              }`}
+          <div className="flex gap-2 flex-wrap">
+            <Link
+              href={`/owner/farms/${farmId}/workers`}
+              className="px-5 py-2.5 rounded-xl font-extrabold border border-blue-200 bg-blue-100 text-blue-900 hover:bg-blue-200 transition"
             >
-              Not done ({notDone.length})
-            </button>
-            <button
-              onClick={() => setTab("DONE")}
-              className={`px-5 py-2.5 rounded-xl font-extrabold transition ${
-                tab === "DONE"
-                  ? "bg-green-700 text-white shadow"
-                  : "border border-gray-200 bg-white hover:bg-gray-50"
-              }`}
+              👷 Go to Workers (Assign)
+            </Link>
+            <Link
+              href="/owner/tasks"
+              className="px-5 py-2.5 rounded-xl font-extrabold border border-gray-200 bg-white hover:bg-gray-50 transition"
             >
-              Done ({done.length})
-            </button>
+              📋 Global Tasks
+            </Link>
           </div>
+        </div>
+
+        <div className="mt-5 flex gap-2 flex-wrap">
+          <button
+            onClick={() => setTab("NOT_DONE")}
+            className={`px-5 py-2.5 rounded-xl font-extrabold transition ${
+              tab === "NOT_DONE"
+                ? "bg-gray-900 text-white shadow"
+                : "border border-gray-200 bg-white hover:bg-gray-50"
+            }`}
+          >
+            Not done ({notDone.length})
+          </button>
+          <button
+            onClick={() => setTab("DONE")}
+            className={`px-5 py-2.5 rounded-xl font-extrabold transition ${
+              tab === "DONE"
+                ? "bg-green-700 text-white shadow"
+                : "border border-gray-200 bg-white hover:bg-gray-50"
+            }`}
+          >
+            Done ({done.length})
+          </button>
         </div>
       </div>
 
       <div className="rounded-3xl bg-white border border-gray-200 shadow p-7">
-        <div className="grid gap-4">
-          {list.map((t) => (
-            <div
-              key={t.id}
-              className="rounded-2xl border border-gray-200 bg-[#F7F8F4] p-6 flex items-start justify-between gap-4 flex-wrap"
-            >
-              <div>
-                <div className="font-extrabold text-gray-900 text-lg">{t.title}</div>
-                <div className="mt-1 text-sm text-gray-600 font-semibold">
-                  Due: {t.dueDate} • {t.zone} • Priority: {t.priority} • Status: {t.status}
+        {loading ? (
+          <div className="text-gray-500 font-semibold">Loading tasks...</div>
+        ) : (
+          <div className="grid gap-4">
+            {list.map((t) => (
+              <div
+                key={t.id}
+                className="rounded-2xl border border-gray-200 bg-[#F7F8F4] p-6 flex items-start justify-between gap-4 flex-wrap"
+              >
+                <div className="space-y-2">
+                  <div className="font-extrabold text-gray-900 text-lg">{t.title}</div>
+                  <div className="text-sm text-gray-600 font-semibold">
+                    Due: {formatDate(t.due_date)}
+                    {t.description ? ` • ${t.description}` : ""}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <PriorityChip priority={t.priority} />
+                    <StatusChip status={t.status} />
+                  </div>
                 </div>
-                <div className="mt-2">
-                  <RiskChip dueDate={t.dueDate} />
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Link
+                    href={`/owner/farms/${farmId}/workers`}
+                    className="text-sm font-extrabold text-blue-800 hover:text-blue-900"
+                  >
+                    Assign to another worker →
+                  </Link>
+                  <div className="text-sm text-gray-700 font-semibold">
+                    {t.worker.name} ({t.worker.email})
+                  </div>
                 </div>
               </div>
+            ))}
 
-              <Link href={`/owner/farms/${farmId}/workers/${t.workerId}`} className="flex items-center gap-3">
-                <img
-                  src={t.workerPhoto}
-                  className="h-10 w-10 rounded-2xl border border-gray-200 object-cover"
-                  alt="worker"
-                />
-                <div className="text-sm font-extrabold text-green-800 hover:text-green-900">
-                  {t.workerName} →
-                </div>
-              </Link>
-            </div>
-          ))}
-
-          {list.length === 0 && (
-            <div className="rounded-2xl border border-gray-200 bg-[#F7F8F4] p-6 text-gray-700 font-semibold">
-              No tasks in this category.
-            </div>
-          )}
-        </div>
+            {list.length === 0 && (
+              <div className="rounded-2xl border border-gray-200 bg-[#F7F8F4] p-6 text-gray-700 font-semibold">
+                No tasks in this category.
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

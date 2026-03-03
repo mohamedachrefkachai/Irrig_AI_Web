@@ -138,6 +138,33 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
               </div>
 
               <div className="mt-6 grid gap-2">
+                {/* Global Workers Management */}
+                <Link
+                  href="/owner/workers"
+                  className={`flex items-center gap-3 rounded-2xl px-4 py-3 font-extrabold transition ${
+                    pathname === "/owner/workers"
+                      ? "bg-green-700 text-white shadow"
+                      : "bg-green-100 text-green-900 hover:bg-green-200"
+                  }`}
+                >
+                  <span>👥</span>
+                  <span>Manage All Workers</span>
+                </Link>
+
+                {/* Global Tasks Management */}
+                <Link
+                  href="/owner/tasks"
+                  className={`flex items-center gap-3 rounded-2xl px-4 py-3 font-extrabold transition ${
+                    pathname === "/owner/tasks"
+                      ? "bg-green-700 text-white shadow"
+                      : "bg-blue-100 text-blue-900 hover:bg-blue-200"
+                  }`}
+                >
+                  <span>📋</span>
+                  <span>Assign Tasks</span>
+                </Link>
+
+                {/* Farm-specific nav */}
                 {nav.map((item) => {
                   const active = pathname === item.href;
                   return (
@@ -176,6 +203,16 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
               </div>
 
               <div className="flex items-center gap-3">
+                <Link href="/owner/tasks">
+                  <button className="border border-gray-300 bg-orange-100 hover:bg-orange-200 transition px-4 py-2 rounded-xl font-extrabold text-orange-700">
+                    📋 Tasks
+                  </button>
+                </Link>
+                <Link href="/owner/workers">
+                  <button className="border border-gray-300 bg-blue-100 hover:bg-blue-200 transition px-4 py-2 rounded-xl font-extrabold text-blue-700">
+                    👥 Workers
+                  </button>
+                </Link>
                 <Link href="/pricing" className="hidden sm:block">
                   <button className="border border-gray-200 bg-white hover:bg-gray-50 transition px-4 py-2 rounded-xl font-extrabold">
                     Offers

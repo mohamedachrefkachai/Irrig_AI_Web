@@ -26,19 +26,46 @@ export default function FarmsList() {
 
   return (
     <div className="grid gap-6">
+      {/* Quick Actions */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-3xl bg-gradient-to-br from-green-50 to-green-100 border border-green-200 shadow p-8">
+          <div className="text-sm font-extrabold text-green-700">QUICK ACTION</div>
+          <h2 className="mt-2 text-xl font-extrabold text-gray-900">👥 Manage Workers</h2>
+          <p className="mt-2 text-gray-600 font-semibold text-sm">
+            Add, edit, or view all your farm workers in one place.
+          </p>
+          <div className="mt-6">
+            <Link href="/owner/workers">
+              <button className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-extrabold shadow">
+                Go to Workers →
+              </button>
+            </Link>
+          </div>
+        </div>
+
+        <div className="rounded-3xl bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 shadow p-8">
+          <div className="text-sm font-extrabold text-blue-700">MANAGE FARMS</div>
+          <h2 className="mt-2 text-xl font-extrabold text-gray-900">🌾 My Farms</h2>
+          <p className="mt-2 text-gray-600 font-semibold text-sm">
+            Create a new farm, or manage existing ones.
+          </p>
+          <div className="mt-6">
+            <Link href="/dashboard/farms/new">
+              <button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-extrabold shadow">
+                Add New Farm →
+              </button>
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Farms Section */}
       <div className="rounded-3xl bg-white border border-gray-200 shadow p-8">
         <div className="text-sm font-extrabold text-green-700">FARMS</div>
         <h1 className="mt-2 text-2xl font-extrabold text-gray-900">Your Farms</h1>
         <p className="mt-2 text-gray-600 font-semibold">
           Select a farm to open the dashboard.
         </p>
-        <div className="mt-6">
-          <Link href="/dashboard/farms/new">
-            <button className="bg-green-700 hover:bg-green-800 text-white px-6 py-3 rounded-xl font-extrabold shadow">
-              Add New Farm
-            </button>
-          </Link>
-        </div>
       </div>
       {loading && <div className="text-gray-500">Loading...</div>}
       {!loading && farms.length === 0 && <div className="text-gray-500">No farms found.</div>}

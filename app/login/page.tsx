@@ -45,6 +45,12 @@ export default function LoginPage() {
             } catch {}
           }
           document.cookie = `session=${encodeURIComponent(JSON.stringify({ role, status, fullName, email, userId }))}; path=/`;
+          
+          // Store owner_id in localStorage for owner pages
+          if (role === "OWNER") {
+            localStorage.setItem("owner_id", userId);
+          }
+          
           // Redirect based on role
           if (role === "superadmin") {
             window.location.href = "/admin/dashboard";
