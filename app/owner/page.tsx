@@ -95,7 +95,7 @@ export default function OwnerDashboard() {
 
   const loadWeather = async (region: string) => {
     try {
-      const res = await fetch(`/api/weather?city=${encodeURIComponent(region)}&days=3`, { cache: "no-store" });
+      const res = await fetch(`/api/weather?city=${encodeURIComponent(region)}&days=7`, { cache: "no-store" });
       const data = await res.json();
       if (data?.error) return;
 
@@ -233,7 +233,7 @@ export default function OwnerDashboard() {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <div className="text-sm font-extrabold uppercase text-green-200">
-                  {forecastMode === "daily" ? "3-Day Forecast" : "24-Hour Forecast"}
+                  {forecastMode === "daily" ? "7-Day Forecast" : "24-Hour Forecast"}
                 </div>
                 <h2 className="mt-1 text-xl font-extrabold text-white">
                   {forecastMode === "daily" ? "Daily Weather" : "Hourly Weather"}

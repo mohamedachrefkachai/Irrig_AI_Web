@@ -13,6 +13,18 @@ export default function FarmDetailPage() {
   const [zones, setZones] = useState<any[]>([]);
   const [station, setStation] = useState<any>(null);
   const [actuator, setActuator] = useState<any>(null);
+  const [realWeather, setRealWeather] = useState<any>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [soilMoistureInput, setSoilMoistureInput] = useState<number | null>(null);
+  const [rainfallMmInput, setRainfallMmInput] = useState<number | null>(null);
+  const [sensorDataLoaded, setSensorDataLoaded] = useState<any>({
+    soilMoisture: null,
+    rainfallMm: null,
+    temperature: null,
+    humidity: null,
+  });
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiPrediction, setAiPrediction] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [actuatorLoading, setActuatorLoading] = useState(false);
 
@@ -49,6 +61,56 @@ export default function FarmDetailPage() {
       }
     }
     fetchFarm();
+  }, [farmId]);
+
+  useEffect(() => {
+    if (!farm?.location) return;
+
+    async function fetchRealWeather() {
+      setWeatherLoading(true);
+      try {
+        const city = farm.location.split(",")[0]?.trim() || "Tunis";
+        const res = await fetch(`/api/weather?city=${encodeURIComponent(city)}&days=7`);
+        if (res.ok) {
+          setRealWeather(await res.json());
+        } else {
+          setRealWeather(null);
+        }
+      } finally {
+        setWeatherLoading(false);
+      }
+    }
+
+    fetchRealWeather();
+  }, [farm?.location]);
+
+  // Load sensor data for AI prediction
+  useEffect(() => {
+    async function fetchSensorData() {
+      try {
+        const res = await fetch(`/api/dashboard/farms/${farmId}/sensor-data`);
+        if (res.ok) {
+          const data = await res.json();
+          setSensorDataLoaded(data);
+          
+          // Auto-populate soil moisture if available
+          if (data.soilMoisture !== null && data.soilMoisture !== undefined) {
+            setSoilMoistureInput(Number(data.soilMoisture));
+          }
+          
+          // Auto-populate rainfall if available
+          if (data.rainfallMm !== null && data.rainfallMm !== undefined) {
+            setRainfallMmInput(Number(data.rainfallMm));
+          }
+        }
+      } catch (err) {
+        console.log("Could not fetch sensor data:", err);
+      }
+    }
+
+    if (farmId) {
+      fetchSensorData();
+    }
   }, [farmId]);
 
   const refreshDeviceData = async () => {
@@ -103,8 +165,45 @@ export default function FarmDetailPage() {
     }
   };
 
+  const runAiPrediction = async () => {
+    // Use sensor data if loaded, otherwise use manual inputs + station/weather
+    const temperatureC = Number(sensorDataLoaded?.temperature ?? station?.temperature ?? realWeather?.temperature ?? 0);
+    const humidity = Number(sensorDataLoaded?.humidity ?? station?.humidity ?? realWeather?.humidity ?? 0);
+    
+    // For soil moisture and rainfall: use sensor if available, else use manual input (or 0 as fallback)
+    const soilMoisture = sensorDataLoaded?.soilMoisture ?? soilMoistureInput ?? 50;
+    const rainfallMm = sensorDataLoaded?.rainfallMm ?? rainfallMmInput ?? 0;
+
+    setAiLoading(true);
+    try {
+      const res = await fetch("/api/ai/irrigation/predict", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          farmId, // Pass farmId to use real sensor data
+          soilMoisture,
+          temperatureC,
+          humidity,
+          rainfallMm,
+        }),
+      });
+
+      if (res.ok) {
+        setAiPrediction(await res.json());
+      }
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   if (loading) return <div className="text-gray-500 p-8">Loading...</div>;
   if (!farm) return <div className="text-red-600 p-8">Farm not found.</div>;
+
+  const stationLastUpdateMs = station?.recorded_at ? new Date(station.recorded_at).getTime() : null;
+  const actuatorLastUpdateMs = actuator?.updated_at ? new Date(actuator.updated_at).getTime() : null;
+  const nowMs = Date.now();
+  const stationConnected = !!stationLastUpdateMs && nowMs - stationLastUpdateMs <= 5 * 60 * 1000;
+  const actuatorConnected = !!actuatorLastUpdateMs && nowMs - actuatorLastUpdateMs <= 30 * 60 * 1000;
 
   // 2D Drawing
   const width = farm.longueur || 100;
@@ -194,6 +293,12 @@ export default function FarmDetailPage() {
               />
             </div>
 
+            {!stationConnected && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                Sensors are not connected. Please check the weather station power, Wi-Fi, and MQTT connection.
+              </div>
+            )}
+
             <div className="mt-3 grid grid-cols-1 gap-3 text-sm">
               <Metric
                 label="Light"
@@ -229,6 +334,12 @@ export default function FarmDetailPage() {
               </span>
             </div>
 
+            {!actuatorConnected && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                Actuator is not connected. Please verify the ESP32 actuator node and relay wiring.
+              </div>
+            )}
+
             <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-4">
               <div className="text-xs font-extrabold uppercase text-gray-500 mb-3">Control Mode</div>
               <div className="grid grid-cols-2 gap-3">
@@ -251,14 +362,14 @@ export default function FarmDetailPage() {
 
             <div className="mt-6 flex flex-wrap gap-3">
               <button
-                disabled={actuatorLoading}
+                disabled={actuatorLoading || !actuatorConnected}
                 onClick={() => setValveState("ON")}
                 className="rounded-xl bg-green-600 px-5 py-3 font-extrabold text-white hover:bg-green-700 disabled:opacity-60 transition"
               >
                 Open Valve
               </button>
               <button
-                disabled={actuatorLoading}
+                disabled={actuatorLoading || !actuatorConnected}
                 onClick={() => setValveState("OFF")}
                 className="rounded-xl border border-gray-200 px-5 py-3 font-extrabold text-gray-800 hover:bg-gray-50 disabled:opacity-60 transition"
               >
@@ -270,6 +381,204 @@ export default function FarmDetailPage() {
               Last command: {actuator?.updated_at ? new Date(actuator.updated_at).toLocaleString() : "no command"}
             </div>
           </div>
+        </div>
+
+        <div className="rounded-3xl bg-white border border-gray-200 shadow p-8 mb-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-sm font-extrabold text-indigo-700 uppercase">Real Weather Data</div>
+              <h2 className="mt-1 text-xl font-extrabold text-gray-900">Current + Daily Forecast</h2>
+            </div>
+            <button
+              onClick={async () => {
+                if (!farm?.location) return;
+                setWeatherLoading(true);
+                try {
+                  const city = farm.location.split(",")[0]?.trim() || "Tunis";
+                  const res = await fetch(`/api/weather?city=${encodeURIComponent(city)}&days=7`);
+                  if (res.ok) {
+                    setRealWeather(await res.json());
+                  }
+                } finally {
+                  setWeatherLoading(false);
+                }
+              }}
+              className="rounded-xl border border-gray-200 px-4 py-2 font-bold text-gray-700 hover:bg-gray-50 transition"
+            >
+              {weatherLoading ? "Loading..." : "Refresh"}
+            </button>
+          </div>
+
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-full border border-gray-200 rounded-xl overflow-hidden text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left font-extrabold text-gray-700">Type</th>
+                  <th className="px-4 py-3 text-left font-extrabold text-gray-700">Time/Day</th>
+                  <th className="px-4 py-3 text-left font-extrabold text-gray-700">Condition</th>
+                  <th className="px-4 py-3 text-left font-extrabold text-gray-700">Temp</th>
+                  <th className="px-4 py-3 text-left font-extrabold text-gray-700">Humidity</th>
+                  <th className="px-4 py-3 text-left font-extrabold text-gray-700">Wind</th>
+                  <th className="px-4 py-3 text-left font-extrabold text-gray-700">Rain Chance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {realWeather ? (
+                  <>
+                    <tr className="border-t border-gray-200 bg-indigo-50/40">
+                      <td className="px-4 py-3 font-bold text-indigo-700">Current</td>
+                      <td className="px-4 py-3 text-gray-700">{realWeather.localTime || "--"}</td>
+                      <td className="px-4 py-3 text-gray-700">{realWeather.condition || "--"}</td>
+                      <td className="px-4 py-3 text-gray-700">{realWeather.temperature ?? "--"} °C</td>
+                      <td className="px-4 py-3 text-gray-700">{realWeather.humidity ?? "--"} %</td>
+                      <td className="px-4 py-3 text-gray-700">{realWeather.windSpeed ?? "--"} km/h</td>
+                      <td className="px-4 py-3 text-gray-700">--</td>
+                    </tr>
+
+                    {(realWeather.dailyForecast || []).map((day: any) => (
+                      <tr key={day.date} className="border-t border-gray-200">
+                        <td className="px-4 py-3 font-bold text-gray-800">Forecast</td>
+                        <td className="px-4 py-3 text-gray-700">{day.dayName} ({day.date})</td>
+                        <td className="px-4 py-3 text-gray-700">{day.condition}</td>
+                        <td className="px-4 py-3 text-gray-700">{day.minTemp} / {day.maxTemp} °C</td>
+                        <td className="px-4 py-3 text-gray-700">--</td>
+                        <td className="px-4 py-3 text-gray-700">--</td>
+                        <td className="px-4 py-3 text-gray-700">{day.chanceOfRain ?? "--"} %</td>
+                      </tr>
+                    ))}
+                  </>
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-6 text-center text-gray-500">
+                      {weatherLoading ? "Loading real weather data..." : "No real weather data available yet."}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="rounded-3xl bg-white border border-gray-200 shadow p-8 mb-6">
+          <div className="text-sm font-extrabold text-emerald-700 uppercase">AI DSO1</div>
+          <h2 className="mt-1 text-xl font-extrabold text-gray-900">Irrigation Need Prediction</h2>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div>
+              <label className="text-xs font-extrabold uppercase text-gray-500 flex items-center gap-1">
+                Soil Moisture (%)
+                {sensorDataLoaded?.soilMoisture !== null && <span className="text-green-600">📡</span>}
+              </label>
+              <input
+                type="number"
+                value={soilMoistureInput ?? ""}
+                onChange={(e) => setSoilMoistureInput(e.target.value ? Number(e.target.value) : null)}
+                disabled={sensorDataLoaded?.soilMoisture !== null}
+                placeholder={sensorDataLoaded?.soilMoisture !== null ? "Sensor data" : "Enter value"}
+                className={`mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 font-bold text-gray-800 ${
+                  sensorDataLoaded?.soilMoisture !== null ? "bg-green-50" : ""
+                }`}
+              />
+              {sensorDataLoaded?.soilMoisture !== null ? (
+                <div className="text-xs text-green-600 mt-1 font-bold">✓ Auto-filled from soil sensors</div>
+              ) : (
+                <div className="text-xs text-amber-600 mt-1 font-bold">⚠️ Soil sensors not available - enter manually</div>
+              )}
+            </div>
+            <div>
+              <label className="text-xs font-extrabold uppercase text-gray-500">Temperature (°C)</label>
+              <input
+                type="number"
+                value={Number(sensorDataLoaded?.temperature ?? station?.temperature ?? realWeather?.temperature ?? 0)}
+                readOnly
+                className="mt-2 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 font-bold text-gray-700"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-extrabold uppercase text-gray-500">Humidity (%)</label>
+              <input
+                type="number"
+                value={Number(sensorDataLoaded?.humidity ?? station?.humidity ?? realWeather?.humidity ?? 0)}
+                readOnly
+                className="mt-2 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 font-bold text-gray-700"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-extrabold uppercase text-gray-500 flex items-center gap-1">
+                Rainfall (mm)
+                {sensorDataLoaded?.rainfallMm !== null && <span className="text-green-600">📡</span>}
+              </label>
+              <input
+                type="number"
+                value={rainfallMmInput ?? ""}
+                onChange={(e) => setRainfallMmInput(e.target.value ? Number(e.target.value) : null)}
+                disabled={sensorDataLoaded?.rainfallMm !== null}
+                placeholder={sensorDataLoaded?.rainfallMm !== null ? "Sensor data" : "Enter value"}
+                className={`mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 font-bold text-gray-800 ${
+                  sensorDataLoaded?.rainfallMm !== null ? "bg-green-50" : ""
+                }`}
+              />
+              {sensorDataLoaded?.rainfallMm !== null ? (
+                <div className="text-xs text-green-600 mt-1 font-bold">✓ Auto-filled from weather station</div>
+              ) : (
+                <div className="text-xs text-amber-600 mt-1 font-bold">⚠️ Default value (0mm) - edit if needed</div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <button
+              onClick={runAiPrediction}
+              disabled={aiLoading || (soilMoistureInput === null && sensorDataLoaded?.soilMoisture === null)}
+              className="rounded-xl bg-emerald-600 px-5 py-3 font-extrabold text-white hover:bg-emerald-700 disabled:opacity-60 transition"
+            >
+              {aiLoading ? "Predicting..." : "Predict Irrigation Need"}
+            </button>
+            <div className="text-sm text-gray-500">
+              {sensorDataLoaded?.soilMoisture !== null 
+                ? "✓ Using real soil sensor data" 
+                : soilMoistureInput !== null
+                  ? "Using manual soil input"
+                  : "⚠️ Soil data required"}
+            </div>
+          </div>
+
+          {aiPrediction && (
+            <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm font-extrabold uppercase text-emerald-700">Prediction Result</div>
+                <div className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg font-bold">
+                  {aiPrediction.source}
+                </div>
+              </div>
+              
+              <div className="grid gap-3">
+                <div>
+                  <div className="text-sm text-gray-600">Irrigation Need</div>
+                  <div className="text-2xl font-extrabold text-gray-900">{aiPrediction.irrigationNeed}</div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs text-gray-600 uppercase font-bold">Confidence Score</div>
+                    <div className="text-lg font-extrabold text-gray-800">{aiPrediction.score}%</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-600 uppercase font-bold">Recommendation</div>
+                    <div className="text-sm font-bold text-gray-800">{aiPrediction.recommendation}</div>
+                  </div>
+                </div>
+
+                {aiPrediction.dataSource && (
+                  <div className="text-xs text-gray-600 border-t border-emerald-200 pt-2 mt-2">
+                    <div className="font-bold mb-1">Data sources:</div>
+                    <div>• Soil: {aiPrediction.dataSource.soil}</div>
+                    <div>• Weather: {aiPrediction.dataSource.weather}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Add Zone Form */}

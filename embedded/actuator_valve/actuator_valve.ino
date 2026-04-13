@@ -20,7 +20,7 @@ String stateTopic = String("farm/") + FARM_ID + "/actuator/state";
 
 // ===== Electrovanne via relais =====
 #define RELAY_PIN 26
-const bool RELAY_ACTIVE_HIGH = true; // false si relais actif LOW
+const bool RELAY_ACTIVE_HIGH = true; 
 
 WiFiClientSecure espClient;
 PubSubClient mqttClient(espClient);
