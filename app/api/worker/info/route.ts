@@ -5,6 +5,7 @@ import Worker from "../../../../models/Worker";
 import Task from "../../../../models/Task";
 import Zone from "../../../../models/Zone";
 import Tree from "../../../../models/Tree";
+import Farm from "../../../../models/Farm";
 import mongoose from "mongoose";
 
 export async function GET(req: NextRequest) {

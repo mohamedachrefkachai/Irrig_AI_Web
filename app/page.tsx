@@ -1,28 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-
-type Weather = { temp: number; desc: string; icon: string } | null;
+import { useMemo } from "react";
 
 export default function Home() {
-  const [weather, setWeather] = useState<Weather>(null);
-  const city = "Tunis";
-
-  useEffect(() => {
-    async function fetchWeather() {
-      try {
-        const res = await fetch(`/api/weather?city=${city}`, { cache: "no-store" });
-        const data = await res.json();
-        if (data?.error) throw new Error(data.error);
-        setWeather({ temp: data.temp, desc: data.desc, icon: data.icon });
-      } catch {
-        setWeather(null);
-      }
-    }
-    fetchWeather();
-  }, []);
-
   const year = useMemo(() => new Date().getFullYear(), []);
 
   return (
@@ -68,13 +49,6 @@ export default function Home() {
     {/* HERO CONTENT */}
     <div className="mx-auto max-w-7xl px-6 md:px-10 py-16 md:py-24">
 
-      <div className="inline-flex items-center gap-3 rounded-2xl bg-white/10 backdrop-blur px-4 py-3 mb-6">
-        <span>☀️</span>
-        <div className="text-sm font-semibold">
-          Weather in Tunis • 21°C
-        </div>
-      </div>
-
       <h1 className="text-5xl md:text-6xl font-extrabold leading-tight">
         Smart Irrigation for Modern Farms 🌾
       </h1>
@@ -106,7 +80,7 @@ export default function Home() {
       </div>
 
     </div>
-  </div>
+      </div>
 
 </header>
 
@@ -320,6 +294,33 @@ export default function Home() {
 }
 
 /* ================= Components ================= */
+
+function Metric({
+  label,
+  value,
+  unit,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  unit: string;
+  tone: "blue" | "cyan" | "amber";
+}) {
+  const tones = {
+    blue: "bg-blue-50 text-blue-700 border-blue-100",
+    cyan: "bg-cyan-50 text-cyan-700 border-cyan-100",
+    amber: "bg-amber-50 text-amber-700 border-amber-100",
+  };
+
+  return (
+    <div className={`rounded-2xl border p-4 ${tones[tone]}`}>
+      <div className="text-xs font-extrabold uppercase">{label}</div>
+      <div className="mt-2 text-2xl font-extrabold text-gray-900">
+        {value} <span className="text-sm font-bold text-gray-500">{unit}</span>
+      </div>
+    </div>
+  );
+}
 
 function TrustBadge({ title, desc }: { title: string; desc: string }) {
   return (

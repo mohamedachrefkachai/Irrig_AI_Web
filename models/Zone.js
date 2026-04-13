@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import Farm from "./Farm.js";
 
 const ZoneSchema = new mongoose.Schema({
   farm_id: { type: mongoose.Schema.Types.ObjectId, ref: "Farm", required: true },
